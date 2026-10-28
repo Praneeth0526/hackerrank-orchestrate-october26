@@ -139,6 +139,13 @@ Validating output against HackerRank Orchestrate contract...
 [✓] All HackerRank Orchestrate output contract checks PASSED!
 ```
 
+### 3. Inspect Individual Cases with the Interactive Visual CLI
+Inspect any case live to visualize its identity graph, temporal event timeline, multilingual intent status, and the synthesized remediation DAG:
+
+```bash
+python3 code/main.py --inspect case_05
+```
+
 ---
 
 ## 4. Evaluation Results

@@ -192,14 +192,136 @@ def validate_output(output_file: Path, expected_count: int, quiet: bool = False)
     if not quiet:
         print("[✓] All HackerRank Orchestrate output contract checks PASSED!")
 
+def inspect_case(case_id: str):
+    """
+    Renders an interactive, visual inspection of a single case including:
+    - Resolved identity graph and historical mutations
+    - Temporal event timeline
+    - Multilingual intent classification
+    - Scanned evidence & observations
+    - Audit verdict and ordered steps DAG
+    """
+    engine = AuditEngine()
+
+    # Search for case in both sample and full datasets
+    target_req = None
+    source_file = None
+    for p in [Path(DELETION_REQUESTS_PATH), ROOT_DIR / "dataset" / "sample_deletion_requests.csv"]:
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                for r in csv.DictReader(f):
+                    if r.get("case_id") == case_id:
+                        target_req = r
+                        source_file = p.name
+                        break
+        if target_req:
+            break
+
+    if not target_req:
+        print(f"\n[ERROR] Case '{case_id}' not found in deletion_requests.csv or sample_deletion_requests.csv.\n")
+        return
+
+    email = target_req["email"]
+    requested_at = target_req.get("requested_at", "N/A")
+    reported_status = target_req.get("reported_status", "N/A")
+    reported_at = target_req.get("reported_at", "N/A")
+    audit_at = target_req["audit_at"]
+    request_text = target_req["request_text"]
+
+    user = engine.identity_resolver.resolve_by_email(email)
+    is_auth = engine.intent_classifier.is_deletion_authorized(request_text)
+
+    status, steps = engine.audit_case(
+        case_id=case_id,
+        email=email,
+        request_text=request_text,
+        audit_at=audit_at,
+        reported_status=reported_status,
+        requested_at=requested_at,
+        reported_at=reported_at,
+    )
+
+    print("\n" + "=" * 78)
+    print(f"       GHOST DATA DELETION-AUDIT INSPECTOR: {case_id} (Source: {source_file})")
+    print("=" * 78)
+
+    print("\n[1. REQUEST SPECIFICATION & CLAIM]")
+    print(f"  • Case ID:         {case_id}")
+    print(f"  • Submitted Email: {email}")
+    print(f"  • Reported Claim:  {reported_status} (at {reported_at})")
+    print(f"  • Audit Cutoff:    {audit_at}")
+    print(f"  • Request Text:    \"{request_text}\"")
+
+    print("\n[2. MULTILINGUAL INTENT CLASSIFICATION]")
+    if is_auth:
+        print(f"  • Intent Status:   AUTHORIZED DELETION (Confidence: 100%)")
+        print(f"  • Classification:  The request explicitly demands account erasure / data deletion.")
+    else:
+        print(f"  • Intent Status:   NON-DELETION INQUIRY (Status: NOT_APPLICABLE)")
+        print(f"  • Classification:  Request is for data access, export, or profile modification.")
+
+    print("\n[3. IDENTITY GRAPH & ALIAS RESOLUTION]")
+    if user:
+        print(f"  • Primary ID:      {user.user_id} ({user.current_name})")
+        print(f"  • Current Email:   {user.current_email}")
+        print(f"  • Current Phone:   {user.current_phone}")
+        all_emails = sorted(list(user.emails))
+        all_phones = sorted(list(user.phones))
+        all_names = sorted(list(user.names))
+        print(f"  • Resolved Emails: {', '.join(all_emails)}")
+        print(f"  • Resolved Phones: {', '.join(all_phones)}")
+        if len(all_names) > 1:
+            print(f"  • Name Aliases:    {', '.join(all_names)}")
+        print(f"  • Email Hashes:    {len(user.email_hashes)} hashes mapped")
+    else:
+        print(f"  • Primary ID:      UNRESOLVED / UNREGISTERED SUBJECT")
+
+    print("\n[4. TEMPORAL EVENT TIMELINE]")
+    print(f"  Requested At:   {requested_at}")
+    print(f"       │")
+    print(f"       ▼")
+    print(f"  Reported At:    {reported_at} (Workflow reported '{reported_status}')")
+    print(f"       │")
+    print(f"       ▼")
+    print(f"  Audit Cutoff:   {audit_at} (Strict cutoff: later evidence discarded)")
+
+    print("\n[5. AUDIT VERDICT & ORDERED REMEDIATION DAG]")
+    if status == STATUS_COMPLETE:
+        status_banner = "✓ COMPLETE — All required deletions verified, retained records compliant."
+    elif status == STATUS_INCOMPLETE:
+        status_banner = "✗ INCOMPLETE — Residual ghost data or active recreation risks detected!"
+    else:
+        status_banner = "⊘ NOT_APPLICABLE — Deletion not authorized; no action required."
+
+    print(f"  VERDICT: {status_banner}")
+    print(f"  Total Steps Synthesized: {len(steps)}")
+
+    if steps:
+        curr_phase = None
+        for s in steps:
+            phase = s["phase"]
+            if phase != curr_phase:
+                curr_phase = phase
+                print(f"\n  ── {phase} PHASE ──")
+            ev_str = f" [Cited: {s['evidence_id']}]" if s.get("evidence_id") else " [Proposed Action]"
+            print(f"    Step {s['step_no']}: {s['operation']} -> {s['system_id']}:{s['resource_id']} = {s['state']}{ev_str}")
+
+    print("\n[6. RAW CANONICAL JSON OUTPUT]")
+    print(json.dumps(steps, indent=2))
+    print("=" * 78 + "\n")
+
 def main():
     parser = argparse.ArgumentParser(description="HackerRank Orchestrate Deletion-Audit Agent")
     parser.add_argument("--input", default=DELETION_REQUESTS_PATH, help="Path to input deletion requests CSV")
     parser.add_argument("--output", default=str(ROOT_DIR / "output.csv"), help="Path to output CSV")
     parser.add_argument("--quiet", action="store_true", help="Suppress detailed console output")
+    parser.add_argument("--inspect", metavar="CASE_ID", help="Inspect and visually audit a specific case_id (e.g., case_01, case_05)")
     args = parser.parse_args()
 
-    run_audit(input_path=args.input, output_path=args.output, quiet=args.quiet)
+    if args.inspect:
+        inspect_case(args.inspect)
+    else:
+        run_audit(input_path=args.input, output_path=args.output, quiet=args.quiet)
 
 if __name__ == "__main__":
     main()

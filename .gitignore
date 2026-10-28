@@ -43,3 +43,8 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Private Interview & Prep Notes (Participant only - not tracked)
+AI_INTERVIEW_GUIDE.md
+INTERVIEW_PREP.md
+interview_notes/
